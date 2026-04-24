@@ -1,0 +1,40 @@
+# brewer.yaml — example configuration for local development services
+version: "1"
+
+services:
+  - name: postgres
+    command: docker
+    args:
+      - run
+      - --rm
+      - --name
+      - brewer-postgres
+      - -e
+      - POSTGRES_PASSWORD=secret
+      - -p
+      - "5432:5432"
+      - postgres:16-alpine
+
+  - name: redis
+    command: docker
+    args:
+      - run
+      - --rm
+      - --name
+      - brewer-redis
+      - -p
+      - "6379:6379"
+      - redis:7-alpine
+
+  - name: api
+    command: go
+    args:
+      - run
+      - ./cmd/api
+    dir: ./
+    env:
+      - DATABASE_URL=postgres://postgres:secret@localhost:5432/dev?sslmode=disable
+      - REDIS_URL=redis://localhost:6379
+    depends_on:
+      - postgres
+      - redis
