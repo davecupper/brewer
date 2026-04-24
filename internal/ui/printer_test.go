@@ -85,3 +85,18 @@ func TestNoColorOutput(t *testing.T) {
 		t.Errorf("expected no ANSI codes in non-color output")
 	}
 }
+
+func TestServiceFailedNilError(t *testing.T) {
+	p, buf := newBuf()
+	// Ensure ServiceFailed does not panic when called with a nil error.
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("ServiceFailed panicked with nil error: %v", r)
+		}
+	}()
+	p.ServiceFailed("api", nil)
+	out := buf.String()
+	if !strings.Contains(out, "failed") {
+		t.Errorf("expected 'failed' in output, got: %q", out)
+	}
+}
