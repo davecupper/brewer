@@ -11,6 +11,13 @@
 //	status, ok := r.GetStatus(svc.Name)
 //
 // The Runner is safe for concurrent use across goroutines. Each service is
-// tracked by name and its status transitions through Idle → Running → Stopped
-// (or Failed if startup fails).
+// tracked by name and its status transitions through the following states:
+//
+//	Idle → Running → Stopped
+//	Idle → Failed   (if startup fails)
+//	Running → Failed (if the process exits unexpectedly)
+//
+// Callers can use GetStatus to poll the current state of a service, or
+// subscribe to status changes via the Watch method if supported by the
+// implementation.
 package runner
