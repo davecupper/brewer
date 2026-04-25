@@ -3,45 +3,44 @@ package commands
 import (
 	"fmt"
 
-	"github.com/cnaize/brewer/internal/config"
-	"github.com/cnaize/brewer/internal/graph"
-	"github.com/cnaize/brewer/internal/lifecycle"
-	"github.com/cnaize/brewer/internal/process"
-	"github.com/cnaize/brewer/internal/ui"
-	"github.com/spf13/cobra"
+	"github.com/brewer/internal/config"
+	"github.com/brewer/internal/lifecycle"
+	"github.com/brewer/internal/process"
+	"github.com/brewer/internal/ui"
 )
 
-// Restart stops all running services and starts them again in dependency order.
-func Restart(registry *process.Registry) *cobra.Command {
-	return &cobra.Command{
-		Use:   "restart",
-		Short: "Restart all services defined in brewer.yaml",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("brewer.yaml")
-			if err != nil {
-				return fmt.Errorf("load config: %w", err)
-			}
-
-			order, err := graph.Build(cfg)
-			if err != nil {
-				return fmt.Errorf("resolve dependencies: %w", err)
-			}
-
-			printer := ui.NewPrinter()
-
-			mgr := lifecycle.New(cfg, order, registry, printer)
-
-			printer.Info("Stopping services...")
-			if err := mgr.StopAll(cmd.Context()); err != nil {
-				return fmt.Errorf("stop services: %w", err)
-			}
-
-			printer.Info("Starting services...")
-			if err := mgr.StartAll(cmd.Context()); err != nil {
-				return fmt.Errorf("start services: %w", err)
-			}
-
-			return nil
-		},
+// Restart stops and restarts a named service defined in the config file.
+func Restart(configPath, serviceName string) error {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
 	}
+
+	svc := cfg.ServiceByName(serviceName)
+	if svc == nil {
+		return fmt.Errorf("unknown service: %q", serviceName)
+	}
+
+	printer := ui.NewPrinter()
+	reg := process.NewRegistry()
+	mgr := lifecycle.New(cfg, reg, printer)
+
+	printer.ServiceStarting(serviceName)
+
+	// Stop the service if it is currently running.
+	if proc, ok := reg.Get(serviceName); ok && proc.IsRunning() {
+		printer.ServiceStopped(serviceName)
+		if stopErr := proc.Stop(); stopErr != nil {
+			return fmt.Errorf("stop service %q: %w", serviceName, stopErr)
+		}
+	}
+
+	// Start only the requested service (not the full dependency graph).
+	if startErr := mgr.StartOne(svc); startErr != nil {
+		printer.ServiceFailed(serviceName, startErr)
+		return fmt.Errorf("start service %q: %w", serviceName, startErr)
+	}
+
+	printer.ServiceRunning(serviceName)
+	return nil
 }
