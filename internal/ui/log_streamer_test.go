@@ -68,3 +68,17 @@ func TestStreamLines_EmptyLines(t *testing.T) {
 		t.Errorf("expected no output for empty lines, got: %s", buf.String())
 	}
 }
+
+func TestStreamLines_TailLargerThanInput(t *testing.T) {
+	var buf bytes.Buffer
+	ls := NewLogStreamerTo(&buf, "worker", 10)
+	lines := []string{"only", "three", "lines"}
+	ls.StreamLines(lines)
+
+	out := buf.String()
+	for _, line := range lines {
+		if !strings.Contains(out, line) {
+			t.Errorf("expected output to contain %q when tail exceeds line count, got:\n%s", line, out)
+		}
+	}
+}
