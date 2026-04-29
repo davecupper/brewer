@@ -1,23 +1,13 @@
-// Package health provides utilities for waiting until a service becomes
-// healthy before proceeding with dependent service startup.
+// Package health provides health check utilities for brewer services.
 //
-// A health check can be configured per service in brewer.yaml using either
-// an HTTP endpoint or a TCP address. The checker will poll at a fixed
-// interval until the check passes or the configured timeout is exceeded.
+// A Checker is created for a given service configuration and its Wait method
+// blocks until the configured health check passes or the timeout is exceeded.
 //
-// Supported check types:
+// Supported health check types:
 //
-//	http  — performs an HTTP GET and expects a 2xx response
-//	tcp   — attempts a TCP dial and expects a successful connection
+//   - http  — performs an HTTP GET and expects a 2xx response
+//   - tcp   — dials a TCP address and expects a successful connection
+//   - exec  — runs a shell command and expects exit code 0
 //
-// Example configuration:
-//
-//	services:
-//	  - name: api
-//	    command: ./api-server
-//	    health_check:
-//	      type: http
-//	      target: http://localhost:8080/health
-//	      interval: 2s
-//	      timeout: 30s
+// If no health check is configured for a service, Wait returns immediately.
 package health

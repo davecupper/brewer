@@ -1,4 +1,4 @@
-package health_test
+package health
 
 import (
 	"context"
@@ -8,46 +8,44 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nickcorin/brewer/internal/config"
-	"github.com/nickcorin/brewer/internal/health"
+	"github.com/patrickward/brewer/internal/config"
 )
 
-func svc(hc *config.HealthCheck) config.Service {
-	return config.Service{Name: "test", HealthCheck: hc}
+func svc(hcType, target, timeout, interval string) config.Service {
+	return config.Service{
+		Name: "test",
+		HealthCheck: config.HealthCheck{
+			Type:     hcType,
+			Target:   target,
+			Timeout:  timeout,
+			Interval: interval,
+		},
+	}
 }
 
 func TestWait_NoHealthCheck(t *testing.T) {
-	c := health.New(svc(nil))
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	if err := c.Wait(ctx); err != nil {
+	c := New(svc("", "", "", ""))
+	if err := c.Wait(context.Background()); err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
 }
 
 func TestWait_HTTP_Success(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
-	c := health.New(svc(&config.HealthCheck{Type: "http", Target: ts.URL}))
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	if err := c.Wait(ctx); err != nil {
-		t.Fatalf("expected nil, got %v", err)
+	c := New(svc("http", ts.URL, "5s", "100ms"))
+	if err := c.Wait(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestWait_HTTP_Timeout(t *testing.T) {
-	c := health.New(svc(&config.HealthCheck{Type: "http", Target: "http://127.0.0.1:19999"}))
-	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Millisecond)
-	defer cancel()
-
-	if err := c.Wait(ctx); err == nil {
-		t.Fatal("expected timeout error, got nil")
+	c := New(svc("http", "http://127.0.0.1:19999", "300ms", "100ms"))
+	if err := c.Wait(context.Background()); err == nil {
+		t.Fatal("expected timeout error")
 	}
 }
 
@@ -58,21 +56,38 @@ func TestWait_TCP_Success(t *testing.T) {
 	}
 	defer ln.Close()
 
-	c := health.New(svc(&config.HealthCheck{Type: "tcp", Target: ln.Addr().String()}))
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+	c := New(svc("tcp", ln.Addr().String(), "5s", "100ms"))
+	if err := c.Wait(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
 
-	if err := c.Wait(ctx); err != nil {
-		t.Fatalf("expected nil, got %v", err)
+func TestWait_TCP_Timeout(t *testing.T) {
+	c := New(svc("tcp", "127.0.0.1:19998", "300ms", "100ms"))
+	if err := c.Wait(context.Background()); err == nil {
+		t.Fatal("expected timeout error")
+	}
+}
+
+func TestWait_Exec_Success(t *testing.T) {
+	c := New(svc("exec", "exit 0", "5s", "100ms"))
+	if err := c.Wait(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestWait_Exec_Timeout(t *testing.T) {
+	c := New(svc("exec", "exit 1", "300ms", "100ms"))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := c.Wait(ctx); err == nil {
+		t.Fatal("expected error")
 	}
 }
 
 func TestWait_UnknownType(t *testing.T) {
-	c := health.New(svc(&config.HealthCheck{Type: "grpc", Target: "localhost:50051"}))
-	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Millisecond)
-	defer cancel()
-
-	if err := c.Wait(ctx); err == nil {
-		t.Fatal("expected error for unknown probe type, got nil")
+	c := New(svc("grpc", "localhost:50051", "1s", "100ms"))
+	if err := c.Wait(context.Background()); err == nil {
+		t.Fatal("expected error for unknown type")
 	}
 }
