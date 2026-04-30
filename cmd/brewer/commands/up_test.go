@@ -47,3 +47,15 @@ func TestUp_CyclicDeps(t *testing.T) {
 		t.Fatal("expected cycle error, got nil")
 	}
 }
+
+func TestUp_UnknownDependency(t *testing.T) {
+	p := writeTempConfig(t, `services:
+  - name: a
+    command: echo
+    depends_on: [nonexistent]
+`)
+	err := commands.Up(p)
+	if err == nil {
+		t.Fatal("expected error for unknown dependency, got nil")
+	}
+}
